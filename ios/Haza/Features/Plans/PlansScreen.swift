@@ -108,7 +108,10 @@ struct PlanEditor: View {
         guard q.count > 2 else { results = []; return }
         let r = MKLocalSearch.Request(); r.naturalLanguageQuery = q
         if let loc = LocationService.shared.location { r.region = MKCoordinateRegion(center: loc.coordinate, latitudinalMeters: 60_000, longitudinalMeters: 60_000) }
-        MKLocalSearch(request: r).start { response, _ in results = Array((response?.mapItems ?? []).prefix(5)) }
+        MKLocalSearch(request: r).start { response, _ in
+            let items = Array((response?.mapItems ?? []).prefix(5))
+            Task { @MainActor in results = items }
+        }
     }
 
     private func post() {

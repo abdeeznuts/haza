@@ -13,6 +13,7 @@ public struct HomeSuggestion: Equatable, Sendable {
     public var point: GeoPoint
     public var nights: Int
     public var confidence: Double   // 0…1
+    public init(point: GeoPoint, nights: Int, confidence: Double) { self.point = point; self.nights = nights; self.confidence = confidence }
 }
 
 public enum HomeInference {

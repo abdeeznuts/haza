@@ -52,9 +52,13 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private func startMotion() {
         guard CMMotionActivityManager.isActivityAvailable() else { return }
         motion.startActivityUpdates(to: .main) { [weak self] activity in
-            guard let self, let a = activity else { return }
-            if a.automotive, a.confidence != .low { self.beginDriveIfNeeded() }
-            else if a.stationary, a.confidence == .high { self.noteStill() }
+            guard let a = activity else { return }
+            let automotive = a.automotive && a.confidence != .low
+            let still = a.stationary && a.confidence == .high
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if automotive { self.beginDriveIfNeeded() } else if still { self.noteStill() }
+            }
         }
     }
 

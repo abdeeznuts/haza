@@ -211,7 +211,7 @@ struct HomeSetupView: View {
     private func geocode(_ address: String) {
         CLGeocoder().geocodeAddressString(address) { marks, _ in
             guard let c = marks?.first?.location?.coordinate else { return }
-            position = .region(MKCoordinateRegion(center: c, latitudinalMeters: 400, longitudinalMeters: 400))
+            Task { @MainActor in position = .region(MKCoordinateRegion(center: c, latitudinalMeters: 400, longitudinalMeters: 400)) }
         }
     }
 }

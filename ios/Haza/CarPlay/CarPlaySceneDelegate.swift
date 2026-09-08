@@ -17,7 +17,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         interface = interfaceController
         let tabs = CPTabBarTemplate(templates: [talkTemplate(), friendsTemplate(), plansTemplate()])
         interfaceController.setRootTemplate(tabs, animated: true, completion: nil)
-        refresh = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in self?.reload() }   // Apple: ≥ 10 s
+        refresh = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in   // Apple: ≥ 10 s
+            Task { @MainActor in self?.reload() }
+        }
     }
 
     func templateApplicationScene(_ scene: CPTemplateApplicationScene, didDisconnectInterfaceController interfaceController: CPInterfaceController) {

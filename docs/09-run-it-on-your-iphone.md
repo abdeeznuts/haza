@@ -4,15 +4,9 @@ Two halves: GitHub's free Mac servers **build** the app; **Sideloadly** on your 
 
 What you get with a free Apple ID: the whole app — map, friends, speed, drives with route playback, plans, crews, talk (in-app hold-to-talk over the same channel), pings and "plan is live" alerts (in-app banner, or a local notification while Haza runs in the background), radar, home intelligence, briefing. What waits for a paid developer signature: the Lock Screen / CarPlay walkie-talkie mode (Apple's Push to Talk entitlement), Home Screen widgets and Control Center control, push notifications when the app is fully closed, Sign in with Apple, the Apple Watch app, and `haza.app/...` links opening the app (the invite **code** works instead). Free Apple ID rules: the app stops opening after 7 days (re-install from Sideloadly, data is kept), max 3 sideloaded apps, and you need Developer Mode on.
 
-## A. One-time: GitHub (10 minutes)
+## A. GitHub — done (Sep 8, 2026)
 
-1. github.com → create a free account → **New repository** → name `haza`, **Public** (public = unlimited free Mac build minutes), no README → Create.
-2. Get the code up. Either give the token to Claude (fastest — it pushes, runs the build, reads the errors and fixes them):
-   - GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate. Repository access: *Only select repositories* → `haza`. Permissions: **Contents: Read and write**, **Actions: Read and write**, **Workflows: Read and write**. Copy the token and paste it in the chat. Delete the token when the build is green.
-   - …or do it yourself: install **GitHub Desktop**, *File → Add local repository* → `Documents\Haza` → *Publish repository* (untick "keep private").
-3. Repo → **Actions** tab → *iOS build* → **Run workflow**. Green tick after ~20 minutes. Open the run → **Artifacts** → download **Haza-ipa** (a zip with `Haza-sideload.ipa` and `Haza-full-unsigned.ipa`).
-
-   First runs are expected to fail on compiler errors — the code has never been through Xcode. That is the loop Claude closes with the token: read log → fix → push → rerun.
+The repo is **github.com/abdeeznuts/haza** (public, account `abdeeznuts`). Every push to `main` runs the *iOS build* workflow on a free macOS runner; a green run's **Artifacts → Haza-ipa** zip contains `Haza-sideload.ipa` and `Haza-full-unsigned.ipa`. To rebuild by hand: repo → Actions → iOS build → Run workflow. The GitHub CLI authorization Claude used can be revoked any time at github.com → Settings → Applications → Authorized OAuth Apps → GitHub CLI.
 
 ## B. One-time: Supabase sign-in email (2 minutes, or say "do it from my laptop")
 

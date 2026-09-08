@@ -148,6 +148,7 @@ final class AppState {
 extension DeviceFacts {
     /// Things only the phone knows. Location + notifications are real checks; Watch/CarPlay/Control
     /// completion is recorded when the user goes through the relevant briefing step.
+    @MainActor
     static func current() async -> DeviceFacts {
         let loc = LocationService.shared.authorization == .authorizedAlways
         let notif = await NotificationsService.isAuthorized()
