@@ -7,11 +7,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { adminClient, handle, HttpError, json } from "../_shared/supabase.ts";
 import { providerToken } from "../_shared/apns.ts";
+import { setting } from "../_shared/settings.ts";
 
 interface Hook { type: string; table: string; record: Record<string, unknown>; old_record: Record<string, unknown> | null }
 
 async function sendAlert(token: string, environment: string, title: string, body: string, data: Record<string, unknown>, category: string) {
-  const bundle = Deno.env.get("APNS_BUNDLE_ID");
+  const bundle = await setting("APNS_BUNDLE_ID");
   if (!bundle) throw new Error("APNS_BUNDLE_ID not set");
   const host = environment === "sandbox" ? "https://api.sandbox.push.apple.com" : "https://api.push.apple.com";
   const res = await fetch(`${host}/3/device/${token}`, {
@@ -32,7 +33,7 @@ async function sendAlert(token: string, environment: string, title: string, body
 
 Deno.serve(handle(async (req) => {
   if (req.method !== "POST") throw new HttpError(405, "POST only");
-  const expected = Deno.env.get("PUSH_WEBHOOK_SECRET");
+  const expected = await setting("PUSH_WEBHOOK_SECRET");
   if (!expected) throw new HttpError(503, "PUSH_WEBHOOK_SECRET not set");
   if (req.headers.get("x-webhook-secret") !== expected) throw new HttpError(401, "bad secret");
 
@@ -86,6 +87,9 @@ Deno.serve(handle(async (req) => {
   }
 
   if (recipients.length === 0) return json({ ok: true, sent: 0 });
+  // Launch phase without an Apple Developer account: no APNs key yet. The in-app inbox (Realtime) already
+  // delivered this event; just say so instead of failing.
+  if (!(await setting("APNS_TEAM_ID"))) return json({ ok: true, skipped: "apns not configured", recipients: recipients.length });
   const { data: tokens } = await admin.from("device_tokens").select("user_id, token, environment").in("user_id", recipients).eq("platform", "ios");
   const results = await Promise.all((tokens ?? []).map((t) => sendAlert(t.token, t.environment, title, body, data, category)));
   const dead = results.filter((r) => r.status === 410 || (r.status === 400 && r.reason === "BadDeviceToken")).map((r) => r.token);

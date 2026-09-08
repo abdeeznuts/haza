@@ -5,6 +5,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { adminClient, handle, HttpError, json, requireUser } from "../_shared/supabase.ts";
 import { sendPushToTalk } from "../_shared/apns.ts";
+import { setting } from "../_shared/settings.ts";
 
 Deno.serve(handle(async (req) => {
   if (req.method !== "POST") throw new HttpError(405, "POST only");
@@ -17,6 +18,9 @@ Deno.serve(handle(async (req) => {
   const admin = adminClient();
   const { data: ok } = await admin.rpc("can_access_channel", { c: channelId, u: userId });
   if (!ok) throw new HttpError(403, "not a member of this channel");
+
+  // No Apple Developer account yet → no APNs key → nothing to wake. In-app talk still works over LiveKit.
+  if (!(await setting("APNS_TEAM_ID"))) return json({ ok: true, sent: 0, skipped: "apns not configured" });
 
   const [{ data: me }, { data: members }] = await Promise.all([
     admin.from("profiles").select("display_name").eq("id", userId).single(),

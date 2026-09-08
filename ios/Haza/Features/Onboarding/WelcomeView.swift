@@ -51,22 +51,24 @@ struct WelcomeView: View {
 
             if sentMagicLink {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Check your email. Tap the link, or type the 6-digit code here.")
+                    Text("Check your email. Tap the link, or type the 6-digit code here. (No code in the email? Long-press the link, Copy Link, and paste it here.)")
                         .font(.system(size: 13)).foregroundStyle(HazaTheme.muted)
                     HStack(spacing: 8) {
-                        TextField("000000", text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode)
-                            .font(.system(size: 22, weight: .semibold, design: .monospaced)).kerning(4)
+                        TextField("000000", text: $code).keyboardType(.default).textContentType(.oneTimeCode).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .font(.system(size: 20, weight: .semibold, design: .monospaced))
                             .padding(.horizontal, 14).frame(height: 50)
                             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(HazaTheme.hair, lineWidth: 1))
                             .onChange(of: code) { _, v in
-                                code = String(v.filter(\.isNumber).prefix(6))
-                                if code.count == 6 { Task { await verify() } }
+                                if !v.contains("token=") {
+                                    code = String(v.filter(\.isNumber).prefix(6))
+                                    if code.count == 6 { Task { await verify() } }
+                                } else { Task { await verify() } }
                             }
                         Button(checking ? "…" : "Sign in") { Task { await verify() } }
                             .font(.system(size: 15, weight: .semibold)).frame(width: 92, height: 50)
                             .background(HazaTheme.ink, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .foregroundStyle(HazaTheme.bg)
-                            .disabled(code.count != 6 || checking)
+                            .disabled(!(code.count == 6 || code.contains("token=")) || checking)
                     }
                 }
             }
@@ -89,7 +91,7 @@ struct WelcomeView: View {
     }
 
     private func verify() async {
-        guard code.count == 6, !checking else { return }
+        guard code.count == 6 || code.contains("token="), !checking else { return }
         checking = true
         _ = await state.verifyEmailCode(email: email.trimmingCharacters(in: .whitespaces), code: code)
         checking = false

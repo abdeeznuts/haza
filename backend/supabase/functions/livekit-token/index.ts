@@ -4,6 +4,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { AccessToken } from "npm:livekit-server-sdk@2";
 import { adminClient, handle, HttpError, json, requireUser } from "../_shared/supabase.ts";
+import { setting } from "../_shared/settings.ts";
 
 Deno.serve(handle(async (req) => {
   if (req.method !== "POST") throw new HttpError(405, "POST only");
@@ -22,9 +23,9 @@ Deno.serve(handle(async (req) => {
   const { data: profile } = await admin
     .from("profiles").select("display_name").eq("id", userId).single();
 
-  const apiKey = Deno.env.get("LIVEKIT_API_KEY");
-  const apiSecret = Deno.env.get("LIVEKIT_API_SECRET");
-  const url = Deno.env.get("LIVEKIT_URL");
+  const apiKey = await setting("LIVEKIT_API_KEY");
+  const apiSecret = await setting("LIVEKIT_API_SECRET");
+  const url = await setting("LIVEKIT_URL");
   if (!apiKey || !apiSecret || !url) throw new HttpError(503, "LiveKit not configured (set LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET)");
 
   const at = new AccessToken(apiKey, apiSecret, {

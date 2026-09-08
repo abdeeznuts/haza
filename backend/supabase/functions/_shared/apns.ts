@@ -1,3 +1,4 @@
+import { setting } from "./settings.ts";
 // Minimal APNs client (token-based auth, HTTP/2 via fetch) — used for Push to Talk pushes.
 // Secrets: APNS_TEAM_ID, APNS_KEY_ID, APNS_PRIVATE_KEY (the .p8 file contents, PEM), APNS_BUNDLE_ID,
 //          APNS_ENV ("production" | "sandbox")
@@ -19,9 +20,9 @@ export async function providerToken(): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   if (cached && now - cached.issuedAt < 45 * 60) return cached.jwt;
 
-  const teamId = Deno.env.get("APNS_TEAM_ID");
-  const keyId = Deno.env.get("APNS_KEY_ID");
-  const pem = Deno.env.get("APNS_PRIVATE_KEY");
+  const teamId = await setting("APNS_TEAM_ID");
+  const keyId = await setting("APNS_KEY_ID");
+  const pem = await setting("APNS_PRIVATE_KEY");
   if (!teamId || !keyId || !pem) throw new Error("APNs not configured (APNS_TEAM_ID / APNS_KEY_ID / APNS_PRIVATE_KEY)");
 
   const key = await crypto.subtle.importKey(
@@ -43,9 +44,9 @@ export interface PushResult { token: string; status: number; reason?: string }
  * — exactly the headers Apple documents in "Creating a Push to Talk app".
  */
 export async function sendPushToTalk(deviceToken: string, payload: Record<string, unknown>): Promise<PushResult> {
-  const bundle = Deno.env.get("APNS_BUNDLE_ID");
+  const bundle = await setting("APNS_BUNDLE_ID");
   if (!bundle) throw new Error("APNS_BUNDLE_ID not set");
-  const host = (Deno.env.get("APNS_ENV") ?? "production") === "sandbox"
+  const host = ((await setting("APNS_ENV")) ?? "production") === "sandbox"
     ? "https://api.sandbox.push.apple.com"
     : "https://api.push.apple.com";
 

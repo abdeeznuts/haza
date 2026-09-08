@@ -42,9 +42,21 @@ final class SupabaseService: @unchecked Sendable {
         try await client.auth.signInWithOTP(email: email, redirectTo: URL(string: "haza://auth"))
     }
 
-    /// The 6-digit code from the same email (Supabase "Magic Link" template must include {{ .Token }}).
+    /// The 6-digit code from the same email (Supabase "Magic Link" template must include {{ .Token }}),
+    /// or — safety net when the template has no code and the link can't open the app — the pasted
+    /// link itself: its `token` query item is a token hash the API accepts directly.
     func verifyEmailCode(email: String, code: String) async throws {
+        if let hash = Self.tokenHash(fromLink: code) {
+            try await client.auth.verifyOTP(tokenHash: hash, type: .magiclink)
+            return
+        }
         try await client.auth.verifyOTP(email: email, token: code.filter(\.isNumber), type: .email)
+    }
+
+    static func tokenHash(fromLink text: String) -> String? {
+        guard text.contains("token="), let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
+        return items.first { $0.name == "token" || $0.name == "token_hash" }?.value
     }
 
     /// `haza://auth#access_token=…` — the magic link redirected into the app.

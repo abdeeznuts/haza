@@ -9,6 +9,7 @@
 //   https://<project-ref>.supabase.co/functions/v1/iap/appstore-notifications
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { adminClient, handle, HttpError, json, requireUser } from "../_shared/supabase.ts";
+import { setting } from "../_shared/settings.ts";
 import { type AppleRenewalInfo, type AppleTransaction, verifyAppleJws } from "../_shared/apple-jws.ts";
 
 interface NotificationPayload {
@@ -19,7 +20,7 @@ interface NotificationPayload {
 }
 
 function bundleOk(bundleId?: string) {
-  const expected = Deno.env.get("APNS_BUNDLE_ID");
+  const expected = await setting("APNS_BUNDLE_ID");
   return !expected || !bundleId || bundleId === expected;
 }
 
