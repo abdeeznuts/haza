@@ -1,0 +1,63 @@
+# Manual: archive + upload to TestFlight from a GitHub macOS runner (no Mac needed after setup).
+# Needs these repository secrets, created once from any computer:
+#   APPSTORE_ISSUER_ID, APPSTORE_KEY_ID, APPSTORE_PRIVATE_KEY   (App Store Connect API key, .p8 contents)
+#   DIST_CERT_P12_BASE64, DIST_CERT_PASSWORD                     (Apple Distribution certificate exported as .p12)
+#   PROVISIONING_PROFILES_BASE64                                 (zip of the App Store provisioning profiles, base64)
+#   DEVELOPMENT_TEAM                                             (your 10-character Team ID)
+# Certificates/profiles are created in the Apple Developer portal in a browser; the .p12 export is the one step
+# that needs a Mac or a friend's Mac (Keychain Access) — or use fastlane match on the runner later.
+name: TestFlight upload
+
+on:
+  workflow_dispatch:
+
+jobs:
+  archive:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+        working-directory: ios
+      - name: Install signing assets
+        env:
+          P12: ${{ secrets.DIST_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+          PROFILES: ${{ secrets.PROVISIONING_PROFILES_BASE64 }}
+        run: |
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          echo "$P12" | base64 --decode > dist.p12
+          security import dist.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROFILES" | base64 --decode > profiles.zip
+          unzip -o profiles.zip -d ~/Library/MobileDevice/Provisioning\ Profiles
+      - name: Archive
+        run: |
+          xcodebuild archive -project Haza.xcodeproj -scheme Haza -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/Haza.xcarchive \
+            DEVELOPMENT_TEAM=${{ secrets.DEVELOPMENT_TEAM }} CODE_SIGN_STYLE=Manual
+        working-directory: ios
+      - name: Export and upload
+        env:
+          KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$KEY" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8
+          cat > ExportOptions.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>manual</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath build/Haza.xcarchive -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/export -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }}
+        working-directory: ios

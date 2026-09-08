@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Join me on Haza</title><link rel="stylesheet" href="/_shared.css">
+<meta name="apple-itunes-app" content="app-id=APPSTORE_ID_HERE"></head><body><main>
+<nav><a href="/">Haza</a></nav>
+<div class="eyebrow">Invite</div>
+<h1>Your friend wants you on the map.</h1>
+<p>Install Haza, then enter this code when you sign in — you'll be connected automatically and you both get free Pro time after your first drive.</p>
+<p style="font-family:var(--serif);font-size:44px;letter-spacing:.06em" id="code">—</p>
+<p><button class="btn" id="copy" style="border:0;cursor:pointer">Copy code</button> &nbsp; <a class="btn" href="https://apps.apple.com/app/idAPPSTORE_ID_HERE">Get Haza</a></p>
+<p style="font-size:13px;color:var(--muted)">If Haza is already installed, this link opens it directly.</p>
+<script>
+  // Universal Links open the app when installed; this page is the fallback for everyone else.
+  const code = (location.pathname.split('/').filter(Boolean)[1] || '').toUpperCase().replace(/[^0-9A-F]/g,'').slice(0,8);
+  document.getElementById('code').textContent = code ? code.slice(0,4)+'-'+code.slice(4) : 'No code in this link';
+  document.getElementById('copy').onclick = () => navigator.clipboard.writeText(code).then(() => document.getElementById('copy').textContent = 'Copied');
+</script>
+<footer>© 2026 Haza</footer></main></body></html>

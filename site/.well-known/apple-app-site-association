@@ -1,0 +1,8 @@
+{
+  "applinks": {
+    "details": [
+      { "appIDs": ["TEAMID.app.haza.ios"], "components": [ { "/": "/i/*", "comment": "invite links" } ] }
+    ]
+  },
+  "webcredentials": { "apps": ["TEAMID.app.haza.ios"] }
+}

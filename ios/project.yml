@@ -1,0 +1,137 @@
+# XcodeGen spec — run `xcodegen generate` in this folder on the Mac to produce Haza.xcodeproj.
+# (brew install xcodegen). Everything Mac-only is listed in docs/06-mac-checklist.md.
+name: Haza
+options:
+  bundleIdPrefix: app.haza
+  # iOS 18: Control Center controls and Live Activity `.supplementalActivityFamilies` (Watch Smart Stack,
+  # CarPlay Dashboard on iOS 26) are iOS 18 APIs; every iPhone that runs Haza's friends runs 18+.
+  deploymentTarget:
+    iOS: "18.0"
+    watchOS: "11.0"
+  xcodeVersion: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    DEVELOPMENT_TEAM: ""            # set your Team ID once enrolled
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_STRICT_CONCURRENCY: minimal
+
+packages:
+  HazaCore:
+    path: Packages/HazaCore
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: "2.0.0"
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift
+    from: "2.0.0"
+
+targets:
+  Haza:
+    type: application
+    platform: iOS
+    sources:
+      - path: Haza
+      - path: Shared
+    dependencies:
+      - package: HazaCore
+      - package: Supabase
+        product: Supabase
+      - package: LiveKit
+        product: LiveKit
+      - target: HazaWidgets
+        embed: true
+      - target: HazaWatch
+        embed: true
+    entitlements:
+      path: Haza/Resources/Haza.entitlements
+    info:
+      path: Haza/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Haza
+        CFBundleName: Haza
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [location, push-to-talk, audio, remote-notification, bluetooth-central]
+        NSLocationWhenInUseUsageDescription: "Haza shows you and your friends on the map and records your drives while the app is open."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "With Always, Haza records drives automatically and keeps your position current for friends when the app is closed. You can choose While Using instead."
+        NSMicrophoneUsageDescription: "Your voice is sent to your crew only while you hold the Talk button."
+        NSBluetoothAlwaysUsageDescription: "Haza connects to your Valentine One radar detector over Bluetooth to show its alerts."
+        NSMotionUsageDescription: "Motion helps Haza notice when a drive starts and stops."
+        NSUserActivityTypes: [app.haza.ios.toggleTalk]
+        # haza://auth  ← Supabase magic-link / OTP redirect (works in every build; no entitlement needed)
+        # haza://i/CODE ← invite fallback when Universal Links aren't available (free Apple ID builds)
+        CFBundleURLTypes:
+          - CFBundleURLName: app.haza.ios
+            CFBundleURLSchemes: [haza]
+        # The phone window scene is SwiftUI's; AppDelegate.configurationForConnecting attaches
+        # SceneDelegate to it. Only the CarPlay scene is declared here (Apple's CarPlay guide).
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.haza.ios
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: false
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.navigation
+
+  HazaWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: HazaWidgets
+      - path: Shared
+    dependencies:
+      - package: HazaCore
+    entitlements:
+      path: HazaWidgets/HazaWidgets.entitlements
+    info:
+      path: HazaWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Haza Widgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.haza.ios.widgets
+
+  HazaWatch:
+    type: application.watchapp2
+    platform: watchOS
+    sources:
+      - path: HazaWatch
+      - path: Shared
+    dependencies:
+      - package: HazaCore
+    entitlements:
+      path: HazaWatch/HazaWatch.entitlements
+    info:
+      path: HazaWatch/Info.plist
+      properties:
+        CFBundleDisplayName: Haza
+        WKCompanionAppBundleIdentifier: app.haza.ios
+        WKRunsIndependentlyOfCompanionApp: true
+        NSMicrophoneUsageDescription: "Your voice is sent to your crew only while you hold the Talk button."
+        UIBackgroundModes: [audio]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.haza.ios.watchkitapp
+        WATCHOS_DEPLOYMENT_TARGET: "11.0"
+
+schemes:
+  Haza:
+    build:
+      targets: { Haza: all, HazaWidgets: all, HazaWatch: all }
+    run:
+      config: Debug
+    archive:
+      config: Release

@@ -1,0 +1,112 @@
+# Free "Mac in the cloud": GitHub-hosted macOS runners compile the whole Xcode project on every push
+# and hand back an install file, so no Mac is ever needed to test on a real iPhone.
+#   • Haza-sideload.ipa      — unsigned, phone app only. Sign + install with Sideloadly/AltStore and a
+#                              free Apple ID (7-day certificate). Everything works in-app; Lock Screen
+#                              walkie-talkie, widgets and pushes wait for a paid-team signature.
+#   • Haza-full-unsigned.ipa — unsigned, with the Watch app and widgets. For a developer account
+#                              (the software house) to re-sign and push to TestFlight.
+# Standard hosted runners are free on public repositories (docs.github.com → "About billing for
+# GitHub Actions"). A full build takes ~15–25 minutes because LiveKit/WebRTC and Supabase are fetched.
+name: iOS build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: HazaCore unit tests (Linux, fast and free)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+      - run: swift test
+        working-directory: ios/Packages/HazaCore
+
+  ipa:
+    name: Xcode build → IPA (device, unsigned)
+    # If the newest Xcode on macos-latest is older than 26, switch this to `macos-26`.
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E "iphoneos|watchos" || true
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+        working-directory: ios
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/build/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/project.yml') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -project Haza.xcodeproj -scheme Haza -derivedDataPath build
+        working-directory: ios
+
+      - name: Build for device (no signing)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Haza.xcodeproj -scheme Haza -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= \
+            -skipPackagePluginValidation -skipMacroValidation \
+            | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+        working-directory: ios
+
+      - name: Package IPAs
+        run: |
+          set -e
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "Haza.app" | head -1)
+          test -d "$APP"
+          # Full: everything the archive would contain (watch app, widgets), still unsigned.
+          rm -rf ipa && mkdir -p ipa/full/Payload ipa/sideload/Payload
+          cp -R "$APP" ipa/full/Payload/
+          (cd ipa/full && zip -qry ../Haza-full-unsigned.ipa Payload)
+          # Sideload: phone app only. Free Apple IDs can't sign a Watch app, and each extension
+          # burns one of the 10 App IDs a free account gets per week.
+          cp -R "$APP" ipa/sideload/Payload/
+          rm -rf ipa/sideload/Payload/Haza.app/Watch ipa/sideload/Payload/Haza.app/PlugIns \
+                 ipa/sideload/Payload/Haza.app/Extensions
+          (cd ipa/sideload && zip -qry ../Haza-sideload.ipa Payload)
+          ls -la ipa/*.ipa
+        working-directory: ios
+
+      - name: Upload IPAs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Haza-ipa
+          path: |
+            ios/ipa/Haza-sideload.ipa
+            ios/ipa/Haza-full-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ios/build.log
