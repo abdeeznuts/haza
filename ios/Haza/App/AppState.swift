@@ -66,6 +66,16 @@ final class AppState {
         } catch { lastError = error.localizedDescription }
     }
 
+    /// Email + password (beta): new accounts are created on the spot, no email to wait for.
+    func signInWithPassword(email: String, password: String, name: String?) async -> Bool {
+        do {
+            let created = try await supabase.signInOrSignUp(email: email, password: password, displayName: name)
+            if created, let name, !name.isEmpty { UserDefaults.standard.set(true, forKey: "name.confirmed") }
+            await loadSignedIn()
+            return true
+        } catch { lastError = error.localizedDescription; return false }
+    }
+
     func signInWithEmail(_ email: String) async {
         do { try await supabase.sendMagicLink(email: email) } catch { lastError = error.localizedDescription }
     }

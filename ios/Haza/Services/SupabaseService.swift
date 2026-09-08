@@ -38,6 +38,22 @@ final class SupabaseService: @unchecked Sendable {
         }
     }
 
+    /// Beta sign-in with no email round-trip: the `signup` function creates a confirmed user (or reports
+    /// that one exists), then we sign in with the password. Returns true when the account was just created.
+    func signInOrSignUp(email: String, password: String, displayName: String?) async throws -> Bool {
+        struct R: Decodable { var ok: Bool; var created: Bool?; var exists: Bool? }
+        var body: [String: String] = ["email": email, "password": password]
+        if let displayName, !displayName.isEmpty { body["display_name"] = displayName }
+        let r: R = try await client.functions.invoke("signup", options: .init(body: body))
+        do {
+            try await client.auth.signIn(email: email, password: password)
+        } catch {
+            if r.exists == true { throw ServiceError.wrongPassword }
+            throw error
+        }
+        return r.created == true
+    }
+
     func sendMagicLink(email: String) async throws {
         try await client.auth.signInWithOTP(email: email, redirectTo: URL(string: "haza://auth"))
     }
@@ -364,11 +380,12 @@ final class SupabaseService: @unchecked Sendable {
 }
 
 enum ServiceError: LocalizedError {
-    case notSignedIn, notConfigured(String)
+    case notSignedIn, notConfigured(String), wrongPassword
     var errorDescription: String? {
         switch self {
         case .notSignedIn: return "You're signed out."
         case .notConfigured(let what): return "\(what) isn't set up yet."
+        case .wrongPassword: return "That email already has an account and the password doesn't match."
         }
     }
 }

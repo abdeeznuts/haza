@@ -11,10 +11,17 @@ struct WelcomeView: View {
     @State private var code = ""
     @State private var checking = false
     @State private var nonce = ""
+    @State private var password = ""
+    @State private var name = ""
+    @State private var useEmailLink = false
+    @State private var busy = false
+
+    private var field: some Shape { RoundedRectangle(cornerRadius: 14, style: .continuous) }
 
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 18) {
-            Spacer()
+            Spacer(minLength: 40)
             Eyebrow("For people who drive together")
             Headline("See your friends on the road. Talk with one press.", size: 38)
             Text("Live map, walkie-talkie on iPhone, Apple Watch and CarPlay, drives you plan together, and your radar detector on the same screen.")
@@ -39,17 +46,38 @@ struct WelcomeView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
-            HStack(spacing: 8) {
+            // Primary: email + password. New emails become accounts on the spot (no email to wait for);
+            // known emails sign in. The email-link path stays as the alternative.
+            if !useEmailLink {
                 TextField("Email", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .padding(.horizontal, 14).frame(height: 50)
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(HazaTheme.hair, lineWidth: 1))
-                Button(sentMagicLink ? "Resend" : "Continue") { Task { await state.signInWithEmail(email.trimmingCharacters(in: .whitespaces)); sentMagicLink = true } }
-                    .font(.system(size: 15, weight: .semibold)).frame(width: 92, height: 50)
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(HazaTheme.hair, lineWidth: 1))
-                    .disabled(!email.contains("@"))
+                    .padding(.horizontal, 14).frame(height: 50).overlay(field.stroke(HazaTheme.hair, lineWidth: 1))
+                SecureField("Password (6+ characters)", text: $password).textContentType(.password)
+                    .padding(.horizontal, 14).frame(height: 50).overlay(field.stroke(HazaTheme.hair, lineWidth: 1))
+                TextField("Your name (new accounts)", text: $name).textContentType(.name).textInputAutocapitalization(.words)
+                    .padding(.horizontal, 14).frame(height: 50).overlay(field.stroke(HazaTheme.hair, lineWidth: 1))
+                PrimaryButton(title: busy ? "One moment…" : "Continue") {
+                    Task {
+                        busy = true
+                        _ = await state.signInWithPassword(email: email.trimmingCharacters(in: .whitespaces), password: password, name: name.trimmingCharacters(in: .whitespaces))
+                        busy = false
+                    }
+                }
+                .disabled(!email.contains("@") || password.count < 6 || busy)
+                Button("Use an email link instead") { useEmailLink = true }.font(.system(size: 13, weight: .semibold)).foregroundStyle(HazaTheme.muted)
+            } else {
+                HStack(spacing: 8) {
+                    TextField("Email", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .padding(.horizontal, 14).frame(height: 50)
+                        .overlay(field.stroke(HazaTheme.hair, lineWidth: 1))
+                    Button(sentMagicLink ? "Resend" : "Send link") { Task { await state.signInWithEmail(email.trimmingCharacters(in: .whitespaces)); sentMagicLink = true } }
+                        .font(.system(size: 15, weight: .semibold)).frame(width: 92, height: 50)
+                        .overlay(field.stroke(HazaTheme.hair, lineWidth: 1))
+                        .disabled(!email.contains("@"))
+                }
+                Button("Use a password instead") { useEmailLink = false }.font(.system(size: 13, weight: .semibold)).foregroundStyle(HazaTheme.muted)
             }
 
-            if sentMagicLink {
+            if useEmailLink && sentMagicLink {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Check your email. Tap the link, or type the 6-digit code here. (No code in the email? Long-press the link, Copy Link, and paste it here.)")
                         .font(.system(size: 13)).foregroundStyle(HazaTheme.muted)
@@ -85,9 +113,13 @@ struct WelcomeView: View {
             if let code = state.pendingInviteCode {
                 Text("Code \(Referral.display(code)) will be applied after you sign in.").font(.system(size: 12)).foregroundStyle(HazaTheme.muted)
             }
+            Spacer(minLength: 24)
         }
         .padding(24)
         .foregroundStyle(HazaTheme.ink)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(HazaTheme.bg)
     }
 
     private func verify() async {
