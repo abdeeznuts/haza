@@ -79,9 +79,9 @@ jobs:
             echo "## xcodebuild"
             grep -E "BUILD (SUCCEEDED|FAILED)" build.log | tail -1
             echo; echo '```'
-            grep -E "error:" build.log | sed -E 's#^.*/haza/haza/##' | sort -u | head -120
+            (grep -E "error:" build.log || echo "no error lines") | sed -E 's#^.*/haza/haza/##' | sort -u | head -120
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } >> "$GITHUB_STEP_SUMMARY" || true
           grep -q "BUILD SUCCEEDED" build.log
         working-directory: ios
 
