@@ -105,7 +105,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.haza.ios.widgets
 
   HazaWatch:
-    type: application.watchapp2
+    # Single-target watchOS app (Xcode 14+): `application` on watchOS, WKApplication=true in Info.plist.
+    # (`application.watchapp2` is the legacy WatchKit-extension layout and makes Xcode 26 emit
+    # "Multiple commands produce HazaWatch.app/HazaWatch".)
+    type: application
     platform: watchOS
     sources:
       - path: HazaWatch
@@ -118,6 +121,7 @@ targets:
       path: HazaWatch/Info.plist
       properties:
         CFBundleDisplayName: Haza
+        WKApplication: true
         WKCompanionAppBundleIdentifier: app.haza.ios
         WKRunsIndependentlyOfCompanionApp: true
         NSMicrophoneUsageDescription: "Your voice is sent to your crew only while you hold the Talk button."
