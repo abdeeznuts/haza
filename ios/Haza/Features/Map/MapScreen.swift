@@ -235,7 +235,7 @@ struct FriendCard: View {
                     Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond").font(.system(size: 14, weight: .semibold)).frame(maxWidth: .infinity).frame(height: 44)
                 }.overlay(RoundedRectangle(cornerRadius: 12).stroke(HazaTheme.hair, lineWidth: 1)).disabled(friend.atHome)
             }
-            Button { dismiss(); nav.sheet = .friends } label: { Text("Notify me when \(friend.displayName) drives or arrives somewhere →").font(.system(size: 13)).foregroundStyle(HazaTheme.muted) }
+            Button { dismiss(); Task { try? await Task.sleep(for: .milliseconds(450)); nav.sheet = .friends } } label: { Text("Notify me when \(friend.displayName) drives or arrives somewhere →").font(.system(size: 13)).foregroundStyle(HazaTheme.muted) }
             Spacer()
         }
         .padding(20).background(HazaTheme.bg)

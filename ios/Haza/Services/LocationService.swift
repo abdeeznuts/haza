@@ -52,6 +52,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private var stillSince: Date?
     private var lastAutomotive = Date.distantPast
     private var probeUntil: Date?                             // GPS on briefly to confirm a suspected drive
+    private var started = false
     private var lowBattery: Bool { UIDevice.current.batteryLevel >= 0 && UIDevice.current.batteryLevel < 0.15 }
 
     override private init() {
@@ -66,8 +67,11 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     // MARK: Lifecycle
 
+    /// Idempotent: profile refreshes call this again; a drive in progress must not lose its GPS session.
     func start() {
         if authorization == .notDetermined { manager.requestWhenInUseAuthorization() }
+        guard !started else { return }
+        started = true
         enterParked()
         startMotion()
     }

@@ -12,22 +12,22 @@ Sources: App Store / Google Play listings and vendor sites read today — Wheelz
 | Planned drives / convoys with their own channel | convoy | ✗ | ✗ | ✗ | routes + join code | ✓ |
 | Route replay | 3D replays | ✗ | ✗ | ✗ | ✓ | ✓ (with the cars that were with you) |
 | Drive stats: distance, time, avg/max | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ |
-| 0–60 timing, G-force, hard braking / rapid acceleration counts | ✓ (Pro) | braking/accel/speed events | ✗ | ✓ (Pro: accel, braking, cornering, stops, lane changes) | ✗ | → |
-| Weekly / monthly recap | ✓ | family driving summary | ✗ | shareable stat image | ✗ | → |
+| 0–60 timing, G-force, hard braking / rapid acceleration counts | ✓ (Pro) | braking/accel/speed events | ✗ | ✓ (Pro: accel, braking, cornering, stops, lane changes) | ✗ | ✓ (per drive + "drive complete" card; private, never ranked) |
+| Weekly / monthly recap | ✓ | family driving summary | ✗ | shareable stat image | ✗ | ✓ (weekly, on the Drives tab) |
 | Garage (cars) | 300+ 3D models | ✗ | ✗ | ✗ | ✗ | ✓ (make/model/year/colour; 3D ✗) |
-| Places with arrive / leave alerts | ✗ | ✓ (2 places free, unlimited paid) | ✓ (notify when arrives/leaves) | ✗ | ✗ | → |
-| Location history / timeline | drive timeline | 2 days (Silver) → 30 days (Gold) | ✗ | drive list | route history | → (unlimited) |
-| Battery level of friends | ✗ | ✓ | ✗ | ✗ | ✗ | → |
-| Check-in | ✗ | ✓ | ✗ | ✗ | ✗ | → |
-| SOS to friends | ✗ | ✓ (+ dispatch paid) | ✗ | ✗ | ✗ | → (friends + tap-to-call 911; no dispatch service) |
-| Crash detection | ✗ | ✓ (Arity; dispatch paid) | ✗ (iPhone 14+ has Apple's own) | ✗ | ✗ | → (beta: on-device impact heuristic → "Are you OK?" → SOS to friends) |
-| Ghost mode / pause sharing | ✓ | bubbles | stop sharing | ✗ | ✗ | → |
+| Places with arrive / leave alerts | ✗ | ✓ (2 places free, unlimited paid) | ✓ (notify when arrives/leaves) | ✗ | ✗ | ✓ (unlimited; "At Work" label; no GPS cost) |
+| Location history / timeline | drive timeline | 2 days (Silver) → 30 days (Gold) | ✗ | drive list | route history | ✓ (90 days; trail map + events per day) |
+| Battery level of friends | ✗ | ✓ | ✗ | ✗ | ✗ | ✓ (+ charging) |
+| Check-in | ✗ | ✓ | ✗ | ✗ | ✗ | ✓ (pick friends, add a note) |
+| SOS to friends | ✗ | ✓ (+ dispatch paid) | ✗ | ✗ | ✗ | ✓ (hold 1.5 s; every friend gets a loud alert + your location; no dispatch service) |
+| Crash detection | ✗ | ✓ (Arity; dispatch paid) | ✗ (iPhone 14+ has Apple's own) | ✗ | ✗ | ✓ beta (on-device > 4 g impact → full-screen "Are you OK?" → SOS to friends after 45 s) |
+| Ghost mode / pause sharing | ✓ | bubbles | stop sharing | ✗ | ✗ | ✓ (1 h / until morning / until off) |
 | Home privacy bubble | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ (150 m; learned automatically) |
 | Radar detector on the map | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ (Valentine One Gen2; shared alerts) |
 | Widgets / Live Activity / CarPlay | widgets + Live Activities | ✗ | ✗ | ✗ | CarPlay nav (beta) | ✓ (Home Screen, Control Center, Live Activity, CarPlay Dashboard; CarPlay app pending entitlement) |
 | Apple Watch app | ✗ | ✗ | ✓ | ✗ | ✗ | ✓ (hold-to-talk, nearby, ping) |
-| ETA to the meet point for everyone | ✗ | ✗ | Maps ETA share | ✗ | turn-by-turn | → |
-| "Friend just started driving" alerts | ✗ | drive start/end (family) | ✗ | ✗ | ✗ | → (opt-in per friend; convoy suggestion when two friends drive near each other) |
+| ETA to the meet point for everyone | ✗ | ✗ | Maps ETA share | ✗ | turn-by-turn | ✓ (computed on each phone with MapKit; only minutes are shared) |
+| "Friend just started driving" alerts | ✗ | drive start/end (family) | ✗ | ✗ | ✗ | ✓ (per-friend toggle, on by default; convoy suggestion when two friends drive within 1.5 km) |
 | Android | ✓ | ✓ | ✗ | ✓ | ✓ | → (APK first, Play later) |
 | Price | Pro $2.99/wk, $4.99/mo, $39.99/yr | $7.99 / $14.99 / $24.99 per month | free | Pro | free | everything free during launch |
 
@@ -39,5 +39,11 @@ Sources: App Store / Google Play listings and vendor sites read today — Wheelz
 ## Where Haza is already ahead
 Walkie-talkie across iPhone/Watch/CarPlay, ping-to-talk, planned drives with their own channel, radar alerts on the map, automatic home privacy bubble, route playback with companions, everything free.
 
-## Gaps being closed in this round (iOS, then Android)
-Battery-first engine; battery % sharing; ghost mode; check-in; SOS; drive-start alerts + convoy suggestion + auto-join live plan channels; places with arrive/leave alerts; driving stats (0–60, G, braking/accel counts) + weekly recap; ETA to meet; location timeline; crash-detection beta.
+## Closed in the parity round (iOS)
+Battery-first engine; battery % sharing; ghost mode; check-in; SOS; drive-start alerts + convoy suggestion; places with arrive/leave alerts; driving stats (0–60, G, braking/accel counts) + "drive complete" card + weekly recap; ETA to meet; location timeline; crash-detection beta.
+
+## How features are introduced (Apple / Meta-style progressive disclosure)
+The first launch asks for three things (location, notifications, one friend) and opens the map. Every other feature introduces itself once, as a single card, the first time it becomes relevant — the first finished drive ("that recorded itself"), the first friend on the road (Talk), the second time Talk is used (Plans), the 4th/8th/12th open (Places, Ghost, Radar). Unseen intros wait quietly in Profile › Discover. Nothing is a tour; nothing repeats. (`DiscoverEngine`.)
+
+## Still open
+Android (next); TestFlight/App Store (needs Apple Developer); LiveKit keys for the walkie-talkie.
