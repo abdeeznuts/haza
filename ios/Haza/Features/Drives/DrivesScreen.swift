@@ -4,9 +4,11 @@ import HazaCore
 
 struct DrivesScreen: View {
     @Environment(AppState.self) private var state
+    @Environment(Nav.self) private var nav
     @State private var drives: [Drive] = []
     @State private var vehicles: [Vehicle] = []
     @State private var selected: Drive?
+    @State private var recap: SupabaseService.WeeklyRecap?
 
     private var monthDrives: [Drive] { drives.filter { Calendar.current.isDate($0.startedAt, equalTo: .now, toGranularity: .month) } }
     private var metric: Bool { state.profile?.usesMetric ?? false }
@@ -17,8 +19,12 @@ struct DrivesScreen: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) { Eyebrow("Drives"); Headline(Date.now.formatted(.dateTime.month(.wide)), size: 28) }
                     Spacer()
-                    if !state.pro.isPro { Pill(text: "Last 30 days · Pro for all") }
+                    Button { nav.sheet = .timeline } label: {
+                        HStack(spacing: 6) { Image(systemName: "clock.arrow.circlepath"); Text("Timeline") }.font(.system(size: 13, weight: .semibold))
+                            .padding(.horizontal, 12).frame(height: 34).overlay(Capsule().stroke(HazaTheme.hair, lineWidth: 1))
+                    }
                 }.padding(.top, 8)
+                if let recap, recap.drives > 0 { RecapCard(recap: recap, metric: metric) }
                 HStack(spacing: 10) {
                     Stat(value: String(Int(metric ? monthDrives.map(\.distanceM).reduce(0, +) / 1000 : Units.miles(fromMeters: monthDrives.map(\.distanceM).reduce(0, +)))), label: metric ? "km driven" : "miles driven")
                     Spacer()
@@ -39,10 +45,15 @@ struct DrivesScreen: View {
             .padding(.horizontal, 20).padding(.bottom, 30)
         }
         .background(HazaTheme.bg)
-        .sheet(item: $selected) { d in DriveDetailView(drive: d, vehicle: vehicles.first { v in v.id == d.vehicleId }, metric: metric, isPro: state.pro.isPro) }
+        .sheet(item: $selected) { d in DriveDetailView(drive: d, vehicle: vehicles.first { v in v.id == d.vehicleId }, metric: metric, isPro: state.pro.isPro || HazaBrand.everythingUnlocked) }
         .task {
             drives = (try? await SupabaseService.shared.drives()) ?? []
             vehicles = (try? await SupabaseService.shared.vehicles()) ?? []
+            recap = try? await SupabaseService.shared.weeklyRecap()
+        }
+        .refreshable {
+            drives = (try? await SupabaseService.shared.drives()) ?? []
+            recap = try? await SupabaseService.shared.weeklyRecap()
         }
     }
 
@@ -74,13 +85,17 @@ struct DriveDetailView: View {
                     Stat(value: Units.formatSpeed(drive.avgSpeedMps ?? 0, metric: metric), label: metric ? "avg km/h" : "avg mph")
                 }.padding(.vertical, 8)
                 Card {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Your top speed").font(.system(size: 15, weight: .semibold))
-                            Text("Private. Never shared or ranked.").font(.system(size: 12)).foregroundStyle(HazaTheme.muted)
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Your top speed").font(.system(size: 15, weight: .semibold))
+                                Text("Private. Never shared or ranked.").font(.system(size: 12)).foregroundStyle(HazaTheme.muted)
+                            }
+                            Spacer()
+                            Text(Units.formatSpeed(drive.maxSpeedMps ?? 0, metric: metric)).font(HazaTheme.display(28)).monospacedDigit()
                         }
-                        Spacer()
-                        Text(Units.formatSpeed(drive.maxSpeedMps ?? 0, metric: metric)).font(HazaTheme.display(28)).monospacedDigit()
+                        Rectangle().fill(HazaTheme.hair).frame(height: 1)
+                        DriveStatsGrid(drive: drive)
                     }
                 }
                 Eyebrow("Playback").padding(.top, 8)

@@ -164,7 +164,7 @@ final class SupabaseService: @unchecked Sendable {
         try decoder.decode([FriendNearby].self, from: try await client.rpc("friends_nearby", params: ["p_radius_m": radiusMeters]).execute().data)
     }
 
-    func upsertLiveLocation(_ p: GeoPoint, speed: Double?, heading: Double?, accuracy: Double?, driving: Bool, vehicleID: UUID?) async throws {
+    func upsertLiveLocation(_ p: GeoPoint, speed: Double?, heading: Double?, accuracy: Double?, driving: Bool, vehicleID: UUID?, battery: Int? = nil, charging: Bool? = nil) async throws {
         guard let id = userID else { return }
         var row: [String: AnyJSON] = [
             "user_id": .string(id.uuidString),
@@ -176,7 +176,106 @@ final class SupabaseService: @unchecked Sendable {
         if let heading { row["heading_deg"] = .double(heading) }
         if let accuracy { row["accuracy_m"] = .double(accuracy) }
         if let vehicleID { row["vehicle_id"] = .string(vehicleID.uuidString) }
+        if let battery { row["battery_pct"] = .integer(battery) }
+        if let charging { row["is_charging"] = .bool(charging) }
         try await client.from("live_locations").upsert(row).execute()
+    }
+
+    // MARK: Places, prefs, ghost, check-in, SOS, ETAs, timeline, recap
+
+    func myPlaces() async throws -> [Place] {
+        try decoder.decode([Place].self, from: try await client.rpc("my_places").execute().data)
+    }
+
+    func addPlace(name: String, kind: String, point: GeoPoint, radius: Int, shareWithFriends: Bool) async throws {
+        guard let id = userID else { throw ServiceError.notSignedIn }
+        try await client.from("places").insert([
+            "user_id": AnyJSON.string(id.uuidString), "name": .string(name), "kind": .string(kind),
+            "point": .string("SRID=4326;POINT(\(point.longitude) \(point.latitude))"),
+            "radius_m": .integer(radius), "share_with": .string(shareWithFriends ? "friends" : "nobody"),
+        ]).execute()
+    }
+
+    func deletePlace(_ id: UUID) async throws {
+        try await client.from("places").delete().eq("id", value: id.uuidString).execute()
+    }
+
+    func placeEvent(_ placeID: UUID, event: String) async throws {
+        guard let id = userID else { return }
+        try await client.from("place_events").insert(["user_id": id.uuidString, "place_id": placeID.uuidString, "event": event]).execute()
+    }
+
+    func driveEvent(_ event: String, at p: GeoPoint) async throws {
+        guard let id = userID else { return }
+        try await client.from("drive_events").insert([
+            "user_id": AnyJSON.string(id.uuidString), "event": .string(event),
+            "point": .string("SRID=4326;POINT(\(p.longitude) \(p.latitude))"),
+        ]).execute()
+    }
+
+    func friendPrefs() async throws -> [FriendPref] {
+        try decoder.decode([FriendPref].self, from: try await client.rpc("my_friend_prefs").execute().data)
+    }
+
+    func setFriendPref(_ friend: UUID, notifyDrives: Bool, notifyPlaces: Bool) async throws {
+        guard let id = userID else { return }
+        try await client.from("friend_prefs").upsert([
+            "user_id": AnyJSON.string(id.uuidString), "friend_id": .string(friend.uuidString),
+            "notify_drives": .bool(notifyDrives), "notify_places": .bool(notifyPlaces),
+        ]).execute()
+    }
+
+    /// nil = visible; a date = hidden until then; .distantFuture = until turned off.
+    func setGhost(until: Date?) async throws {
+        let iso = ISO8601DateFormatter()
+        try await client.rpc("set_ghost", params: ["p_until": until.map { AnyJSON.string(iso.string(from: $0)) } ?? .null]).execute()
+    }
+
+    func checkIn(to friends: [UUID], at p: GeoPoint, note: String?) async throws {
+        guard let id = userID else { return }
+        let rows: [[String: AnyJSON]] = friends.map { f in
+            var r: [String: AnyJSON] = ["from_user": .string(id.uuidString), "to_user": .string(f.uuidString), "kind": .string("checkin"),
+                                        "point": .string("SRID=4326;POINT(\(p.longitude) \(p.latitude))")]
+            if let note, !note.isEmpty { r["note"] = .string(note) }
+            return r
+        }
+        if !rows.isEmpty { try await client.from("pings").insert(rows).execute() }
+    }
+
+    func sendSOS(lat: Double, lng: Double, note: String?) async throws -> Int {
+        var params: [String: AnyJSON] = ["p_lat": .double(lat), "p_lng": .double(lng)]
+        if let note { params["p_note"] = .string(note) }
+        let data = try await client.rpc("send_sos", params: params).execute().data
+        return (try? decoder.decode(Int.self, from: data)) ?? 0
+    }
+
+    func planETAs(_ plan: UUID) async throws -> [PlanETA] {
+        try decoder.decode([PlanETA].self, from: try await client.rpc("plan_etas", params: ["p_plan": plan.uuidString]).execute().data)
+    }
+
+    func setPlanETA(_ plan: UUID, eta: Date) async throws {
+        try await client.rpc("set_plan_eta", params: ["p_plan": AnyJSON.string(plan.uuidString), "p_eta": .string(ISO8601DateFormatter().string(from: eta))]).execute()
+    }
+
+    func planMeetPoint(_ plan: UUID) async throws -> GeoPoint? {
+        struct Row: Decodable { var lat: Double?; var lng: Double? }
+        let data = try await client.rpc("plan_meet_point", params: ["p_plan": plan.uuidString]).execute().data
+        guard let r = try decoder.decode([Row].self, from: data).first, let lat = r.lat, let lng = r.lng else { return nil }
+        return GeoPoint(latitude: lat, longitude: lng)
+    }
+
+    func timeline(day: Date) async throws -> [TimelineItem] {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
+        return try decoder.decode([TimelineItem].self, from: try await client.rpc("my_timeline", params: ["p_day": f.string(from: day)]).execute().data)
+    }
+
+    struct WeeklyRecap: Decodable {
+        var drives: Int; var miles: Double; var hours: Double
+        var bestZeroSixty: Double?; var maxG: Double?; var hardBrakes: Int; var rapidAccels: Int; var topSpeedMps: Double?
+        enum CodingKeys: String, CodingKey { case drives, miles, hours; case bestZeroSixty = "best_zero_sixty", maxG = "max_g", hardBrakes = "hard_brakes", rapidAccels = "rapid_accels", topSpeedMps = "top_speed_mps" }
+    }
+    func weeklyRecap() async throws -> WeeklyRecap {
+        try decoder.decode(WeeklyRecap.self, from: try await client.rpc("weekly_recap").execute().data)
     }
 
     func findProfile(handle: String) async throws -> FoundProfile? {
@@ -243,13 +342,17 @@ final class SupabaseService: @unchecked Sendable {
         }
     }
 
-    func insertDrive(startedAt: Date, endedAt: Date, distanceM: Double, durationS: Int, avg: Double?, max: Double?, vehicleID: UUID?, route: [GeoPoint]) async throws -> UUID {
+    func insertDrive(startedAt: Date, endedAt: Date, distanceM: Double, durationS: Int, avg: Double?, max: Double?, vehicleID: UUID?, route: [GeoPoint],
+                     hardBrakes: Int = 0, rapidAccels: Int = 0, maxG: Double? = nil, zeroToSixty: Double? = nil) async throws -> UUID {
         guard let id = userID else { throw ServiceError.notSignedIn }
         let iso = ISO8601DateFormatter()
         var row: [String: AnyJSON] = [
             "user_id": .string(id.uuidString), "started_at": .string(iso.string(from: startedAt)), "ended_at": .string(iso.string(from: endedAt)),
             "distance_m": .double(distanceM), "duration_s": .integer(durationS), "is_auto": .bool(true),
+            "hard_brakes": .integer(hardBrakes), "rapid_accels": .integer(rapidAccels),
         ]
+        if let maxG, maxG > 0 { row["max_g"] = .double(maxG) }
+        if let zeroToSixty { row["zero_to_sixty_s"] = .double(zeroToSixty) }
         if let avg { row["avg_speed_mps"] = .double(avg) }
         if let max { row["max_speed_mps"] = .double(max) }
         if let vehicleID { row["vehicle_id"] = .string(vehicleID.uuidString) }

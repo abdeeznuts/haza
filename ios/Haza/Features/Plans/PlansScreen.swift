@@ -7,6 +7,8 @@ struct PlansScreen: View {
     @State private var plans: [PlannedDrive] = []
     @State private var crews: [Crew] = []
     @State private var creating = false
+    @State private var etas: [UUID: [PlanETA]] = [:]
+    @State private var rsvped: Set<UUID> = []
 
     var body: some View {
         ScrollView {
@@ -28,10 +30,11 @@ struct PlansScreen: View {
                             Text(p.title).font(HazaTheme.display(20))
                             if let m = p.meetName { Text("Meet at \(m)").font(.system(size: 13)).foregroundStyle(HazaTheme.muted) }
                             if let c = crews.first(where: { $0.id == p.crewId }) { Text("\(c.emoji) \(c.name)").font(.system(size: 13)).foregroundStyle(HazaTheme.muted) }
+                            if p.status == "live", let list = etas[p.id], !list.isEmpty { ETARow(etas: list, me: state.profile?.id) }
                             HStack(spacing: 8) {
-                                Button("Going") { Task { try? await SupabaseService.shared.rsvp(plan: p.id, status: "going") } }
+                                Button(rsvped.contains(p.id) ? "Going ✓" : "Going") { Task { try? await SupabaseService.shared.rsvp(plan: p.id, status: "going"); rsvped.insert(p.id); Haptics.play(.tap); await refreshETAs() } }
                                     .font(.system(size: 14, weight: .semibold)).padding(.horizontal, 14).frame(height: 36).background(HazaTheme.ink, in: RoundedRectangle(cornerRadius: 10)).foregroundStyle(HazaTheme.bg)
-                                Button("Maybe") { Task { try? await SupabaseService.shared.rsvp(plan: p.id, status: "maybe") } }
+                                Button("Maybe") { Task { try? await SupabaseService.shared.rsvp(plan: p.id, status: "maybe"); rsvped.remove(p.id) } }
                                     .font(.system(size: 14, weight: .semibold)).padding(.horizontal, 14).frame(height: 36).overlay(RoundedRectangle(cornerRadius: 10).stroke(HazaTheme.hair, lineWidth: 1))
                                 if let m = p.meetName {
                                     Button("Directions") { openDirections(to: m) }
@@ -49,14 +52,29 @@ struct PlansScreen: View {
             .padding(.horizontal, 20).padding(.bottom, 30)
         }
         .background(HazaTheme.bg)
-        .sheet(isPresented: $creating) { PlanEditor(crews: crews) { creating = false; Task { await load() } } }
+        .sheet(isPresented: $creating) { PlanEditor(crews: crews) { creating = false; DiscoverEngine.shared.note(.planCreated); Task { await load() } } }
         .task { await load() }
+        .task {
+            // While a plan is live: my ETA to the meet point (MapKit, on device) every 30 s, everyone's ETAs refreshed.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                await refreshETAs()
+            }
+        }
     }
 
     private func load() async {
         async let p = SupabaseService.shared.plans()
         async let c = SupabaseService.shared.crews()
         plans = (try? await p) ?? []; crews = (try? await c) ?? []
+        await refreshETAs()
+    }
+
+    private func refreshETAs() async {
+        for p in plans where p.status == "live" {
+            await PlanETAService.updateMyETA(for: p.id)
+            etas[p.id] = (try? await SupabaseService.shared.planETAs(p.id)) ?? []
+        }
     }
 
     /// Turn-by-turn is Apple Maps' job (no navigation entitlement needed for that).
@@ -66,6 +84,45 @@ struct PlansScreen: View {
             guard let item = response?.mapItems.first else { return }
             item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
         }
+    }
+}
+
+/// "Ali · 12 min · driving" for everyone going. ETAs are computed on each phone with MapKit and
+/// posted; nobody's route is shared, only the minutes.
+struct ETARow: View {
+    let etas: [PlanETA]
+    let me: UUID?
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(etas.sorted { ($0.etaAt ?? .distantFuture) < ($1.etaAt ?? .distantFuture) }) { e in
+                    HStack(spacing: 5) {
+                        Circle().fill(e.isDriving ? HazaTheme.live : HazaTheme.muted).frame(width: 6, height: 6)
+                        Text(e.userId == me ? "You" : e.displayName).font(.system(size: 12, weight: .semibold))
+                        Text(label(e)).font(HazaTheme.display(12)).monospacedDigit().foregroundStyle(HazaTheme.muted)
+                    }
+                    .padding(.horizontal, 9).frame(height: 26).overlay(Capsule().stroke(HazaTheme.hair, lineWidth: 1))
+                }
+            }
+        }
+    }
+    private func label(_ e: PlanETA) -> String {
+        guard let at = e.etaAt, let upd = e.etaUpdatedAt, Date.now.timeIntervalSince(upd) < 600 else { return e.status == "going" ? "no ETA yet" : e.status }
+        let m = Int(at.timeIntervalSinceNow / 60)
+        return m <= 1 ? "arriving" : "\(m) min"
+    }
+}
+
+/// Drive-time to a plan's meet point from where this phone is, via MKDirections (no route leaves the device).
+enum PlanETAService {
+    @MainActor static func updateMyETA(for plan: UUID) async {
+        guard let loc = LocationService.shared.location, let meet = try? await SupabaseService.shared.planMeetPoint(plan) else { return }
+        let req = MKDirections.Request()
+        req.source = MKMapItem(placemark: MKPlacemark(coordinate: loc.coordinate))
+        req.destination = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: meet.latitude, longitude: meet.longitude)))
+        req.transportType = .automobile
+        guard let eta = try? await MKDirections(request: req).calculateETA() else { return }
+        try? await SupabaseService.shared.setPlanETA(plan, eta: Date().addingTimeInterval(eta.expectedTravelTime))
     }
 }
 

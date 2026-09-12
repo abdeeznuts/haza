@@ -2,22 +2,27 @@ import SwiftUI
 import CoreLocation
 import HazaCore
 
-/// "What you're missing" — every row is one tap. Shown at launch until setup items are done,
-/// then reachable from Profile as "Briefing".
+/// "What you're missing" — every row is one tap. At first launch only the three essentials
+/// (location, notifications, a friend); everything else introduces itself later, in context
+/// (DiscoverEngine). The full list lives in Profile as "Briefing".
 struct BriefingView: View {
     @Environment(AppState.self) private var state
     @State private var sheet: BriefingItem.Action?
     var embedded = false
 
+    private static let essentials = ["location_always", "notifications", "no_friends"]
+    private var items: [BriefingItem] { embedded ? state.briefing : state.briefing.filter { Self.essentials.contains($0.key) } }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Eyebrow("Briefing").padding(.top, embedded ? 0 : 24)
-                Headline(Briefing.headline(remaining: state.briefing.count))
-                Text("Haza works better the more it knows. Each row is one tap; the rest can wait.")
+                Headline(Briefing.headline(remaining: items.count))
+                Text(embedded ? "Haza works better the more it knows. Each row is one tap; the rest can wait."
+                     : "Three taps, then the map. Everything else shows up the moment it's useful.")
                     .font(.system(size: 15)).foregroundStyle(HazaTheme.muted).padding(.bottom, 10)
                 Rectangle().fill(HazaTheme.hair).frame(height: 1)
-                ForEach(Array(state.briefing.enumerated()), id: \.element.id) { i, item in
+                ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
                     Button { perform(item) } label: {
                         Row(title: item.title, subtitle: item.detail) { Glyph(text: "\(i + 1)") } trailing: {
                             Image(systemName: "chevron.right").foregroundStyle(HazaTheme.muted)
@@ -25,7 +30,8 @@ struct BriefingView: View {
                     }
                 }
                 if !embedded {
-                    PrimaryButton(title: state.briefing.contains { $0.severity == .setup } ? "Do the rest later" : "Open the map") {
+                    PrimaryButton(title: items.isEmpty ? "Open the map" : "Do the rest later") {
+                        Haptics.play(.start)
                         Task { await state.finishBriefing() }
                     }.padding(.top, 16)
                     Text("Radar detectors are illegal in passenger cars in Virginia, Washington D.C., on military bases, and in commercial vehicles over 10,000 lb. Haza only displays your detector's alerts.")

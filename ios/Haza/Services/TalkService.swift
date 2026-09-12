@@ -89,11 +89,13 @@ final class TalkService: NSObject {
         await connectRoom()
         guard room != nil else { return }               // status already carries the error
         joined = true; status = "Joined"
+        Haptics.play(.talkOn); DiscoverEngine.shared.note(.talkJoined)
         try? await supabase.setJoined(true, channel: c.id)
         publishSnapshot()
     }
 
     private func inAppLeave() async {
+        if joined { Haptics.play(.talkOff) }
         joined = false; transmitting = false; activeSpeaker = nil; status = "Off"
         if let c = conversation { try? await supabase.setJoined(false, channel: c.id) }
         await room?.disconnect(); room = nil
@@ -103,6 +105,7 @@ final class TalkService: NSObject {
     private func inAppBeginTransmit() async {
         guard joined, !transmitting else { return }
         transmitting = true
+        Haptics.play(.tap)
         await setMic(true)
         publishSnapshot()
         if let c = conversation { await supabase.notifyTransmission(channel: c.id, begin: true) }
@@ -189,6 +192,7 @@ extension TalkService: PTChannelManagerDelegate {
     nonisolated func channelManager(_ channelManager: PTChannelManager, didJoinChannel channelUUID: UUID, reason: PTChannelJoinReason) {
         Task { @MainActor in
             self.joined = true; self.status = "Joined"
+            Haptics.play(.talkOn); DiscoverEngine.shared.note(.talkJoined)
             try? await channelManager.setTransmissionMode(.halfDuplex, channelUUID: channelUUID)
             await self.connectRoom()
             if let c = self.conversation { try? await self.supabase.setJoined(true, channel: c.id) }
@@ -198,6 +202,7 @@ extension TalkService: PTChannelManagerDelegate {
 
     nonisolated func channelManager(_ channelManager: PTChannelManager, didLeaveChannel channelUUID: UUID, reason: PTChannelLeaveReason) {
         Task { @MainActor in
+            if self.joined { Haptics.play(.talkOff) }
             self.joined = false; self.transmitting = false; self.activeSpeaker = nil; self.status = "Off"
             if let c = self.conversation { try? await self.supabase.setJoined(false, channel: c.id) }
             await self.room?.disconnect(); self.room = nil

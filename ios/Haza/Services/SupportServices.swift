@@ -16,6 +16,16 @@ enum NotificationsService {
     static func request() async -> Bool {
         (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
+    /// A local notification (no APNs needed): used for crash checks, SOS confirmations and inbox
+    /// events while the app is in the background.
+    static func postLocal(title: String, body: String, category: String = "GENERAL", userInfo: [String: String] = [:]) {
+        let content = UNMutableNotificationContent()
+        content.title = title; content.body = body; content.sound = .default
+        content.categoryIdentifier = category
+        content.interruptionLevel = .timeSensitive   // delivered as "active" until the time-sensitive capability is on the signed build
+        for (k, v) in userInfo { content.userInfo[k] = v }
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+    }
 }
 
 // MARK: - Home (manual, contacts card, inferred)

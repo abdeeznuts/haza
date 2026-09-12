@@ -25,6 +25,7 @@ final class AppState {
         do {
             if try await supabase.restoreSession() {
                 await loadSignedIn()
+                DiscoverEngine.shared.note(.appOpened)      // once per launch: paces the feature intros
             } else {
                 route = .welcome
             }
@@ -83,6 +84,7 @@ final class AppState {
     func loadSignedIn() async {
         do {
             profile = try await supabase.myProfile()
+            LocationService.shared.ghostUntil = profile?.ghostUntil
             if let code = pendingInviteCode { await claimInvite(code) }
             await refreshPro()
             await refreshBriefing()
@@ -100,6 +102,7 @@ final class AppState {
             await TalkService.shared.prepare()
             InboxService.shared.onFriendsChanged = { [weak self] in await self?.refreshFriends() }
             await InboxService.shared.start()
+            await PlacesService.shared.load()
         } catch {
             lastError = error.localizedDescription
             route = .welcome

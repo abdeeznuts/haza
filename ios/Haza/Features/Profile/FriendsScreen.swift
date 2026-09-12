@@ -11,6 +11,7 @@ struct FriendsScreen: View {
     @State private var found: FoundProfile?
     @State private var searched = false
     @State private var pending: [PendingRequest] = []
+    @State private var prefs: [UUID: FriendPref] = [:]
     @State private var message: String?
 
     var body: some View {
@@ -76,9 +77,26 @@ struct FriendsScreen: View {
                 Eyebrow("Friends · \(state.friends.count)").padding(.top, 6)
                 Rectangle().fill(HazaTheme.hair).frame(height: 1)
                 ForEach(state.friends) { f in
-                    Row(title: f.displayName, subtitle: f.atHome ? "At home" : (f.isDriving ? "Driving" : "Parked")) {
+                    Row(title: f.displayName, subtitle: f.statusLine(metric: state.profile?.usesMetric ?? false)) {
                         Text(String(f.displayName.prefix(1))).font(.system(size: 13, weight: .semibold)).frame(width: 34, height: 34).background(HazaTheme.surface2, in: Circle())
-                    } trailing: { EmptyView() }
+                    } trailing: {
+                        Menu {
+                            Section("Notify me when \(f.displayName)…") {
+                                Toggle(isOn: binding(f.userId, \.notifyDrives)) { Label("starts driving", systemImage: "car") }
+                                Toggle(isOn: binding(f.userId, \.notifyPlaces)) { Label("arrives or leaves a place", systemImage: "mappin.and.ellipse") }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "bell\((prefs[f.userId]?.notifyDrives ?? false) || (prefs[f.userId]?.notifyPlaces ?? false) ? ".fill" : "")")
+                                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
+                            }
+                            .font(.system(size: 14)).foregroundStyle(HazaTheme.muted).frame(height: 32).padding(.horizontal, 8)
+                            .overlay(Capsule().stroke(HazaTheme.hair, lineWidth: 1))
+                        }
+                    }
+                }
+                if !state.friends.isEmpty {
+                    Text("Nudges arrive as notifications: “Ali is driving”, “Ali arrived at Work”. Each friend chooses which places are visible.").font(.system(size: 12)).foregroundStyle(HazaTheme.muted)
                 }
                 if state.friends.isEmpty { Text("No friends yet. Your invite link is the fastest way — it connects you automatically.").font(.system(size: 13)).foregroundStyle(HazaTheme.muted) }
             }
@@ -90,7 +108,20 @@ struct FriendsScreen: View {
 
     private func load() async {
         pending = (try? await SupabaseService.shared.pendingRequests()) ?? []
+        prefs = Dictionary(uniqueKeysWithValues: ((try? await SupabaseService.shared.friendPrefs()) ?? []).map { ($0.friendId, $0) })
         await state.refreshFriends()
+    }
+
+    private func binding(_ friend: UUID, _ key: WritableKeyPath<FriendPref, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { prefs[friend]?[keyPath: key] ?? false },
+            set: { v in
+                var p = prefs[friend] ?? FriendPref(friendId: friend, notifyDrives: false, notifyPlaces: false)
+                p[keyPath: key] = v
+                prefs[friend] = p
+                Haptics.play(.tap)
+                Task { try? await SupabaseService.shared.setFriendPref(friend, notifyDrives: p.notifyDrives, notifyPlaces: p.notifyPlaces) }
+            })
     }
     private func search() async {
         found = try? await SupabaseService.shared.findProfile(handle: query)

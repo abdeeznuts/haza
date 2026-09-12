@@ -24,7 +24,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         let ping = UNNotificationCategory(identifier: "PING", actions: [UNNotificationAction(identifier: "JOIN", title: "Join and talk", options: [.foreground])], intentIdentifiers: [])
         let live = UNNotificationCategory(identifier: "PLAN_LIVE", actions: [], intentIdentifiers: [])
-        UNUserNotificationCenter.current().setNotificationCategories([ping, live])
+        let crash = UNNotificationCategory(identifier: "CRASH", actions: [UNNotificationAction(identifier: "IM_OK", title: "I'm OK", options: [])], intentIdentifiers: [])
+        let sos = UNNotificationCategory(identifier: "SOS", actions: [UNNotificationAction(identifier: "MAP", title: "Open the map", options: [.foreground])], intentIdentifiers: [])
+        let drive = UNNotificationCategory(identifier: "DRIVE", actions: [UNNotificationAction(identifier: "TALK", title: "Open Talk", options: [.foreground])], intentIdentifiers: [])
+        UNUserNotificationCenter.current().setNotificationCategories([ping, live, crash, sos, drive])
         // A free-Apple-ID build has no aps-environment; registering would only produce an error.
         if Entitlements.pushNotifications { application.registerForRemoteNotifications() }
         return true
@@ -38,6 +41,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// The tap is a user interaction in the foreground, which is what Apple requires for joining a PTT channel.
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
+        if response.actionIdentifier == "IM_OK" || response.notification.request.content.categoryIdentifier == "CRASH" {
+            await MainActor.run { LocationService.shared.dismissCrash() }
+            return
+        }
         if let s = info["channel_id"] as? String, let id = UUID(uuidString: s) {
             await MainActor.run { NotificationRouter.pendingChannel = id }
             await NotificationRouter.joinPending()

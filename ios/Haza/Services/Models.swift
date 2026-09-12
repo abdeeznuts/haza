@@ -17,14 +17,16 @@ struct Profile: Codable, Identifiable, Equatable {
     var inviteCode: String
     var proUntil: Date?
     var onboardingDone: Bool
+    var ghostUntil: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, handle, units, visibility
         case displayName = "display_name", avatarUrl = "avatar_url", shareSpeed = "share_speed"
         case homeSource = "home_source", homeConfidence = "home_confidence", homeRadiusM = "home_radius_m"
-        case inviteCode = "invite_code", proUntil = "pro_until", onboardingDone = "onboarding_done"
+        case inviteCode = "invite_code", proUntil = "pro_until", onboardingDone = "onboarding_done", ghostUntil = "ghost_until"
     }
     var usesMetric: Bool { units == "kmh" }
+    var isGhost: Bool { ghostUntil.map { $0 > .now } ?? false }
 }
 
 struct Vehicle: Codable, Identifiable, Equatable, Hashable {
@@ -52,11 +54,22 @@ struct FriendLive: Codable, Identifiable, Equatable {
     var vehicleId: UUID?
     var updatedAt: Date
     var atHome: Bool
+    var batteryPct: Int?
+    var isCharging: Bool?
+    var placeName: String?
     var id: UUID { userId }
     enum CodingKeys: String, CodingKey {
         case lat, lng
         case userId = "user_id", displayName = "display_name", avatarUrl = "avatar_url", speedMps = "speed_mps"
         case headingDeg = "heading_deg", isDriving = "is_driving", vehicleId = "vehicle_id", updatedAt = "updated_at", atHome = "at_home"
+        case batteryPct = "battery_pct", isCharging = "is_charging", placeName = "place_name"
+    }
+    /// "At Work", "Driving · 62", "Parked", "At home" — the one-line status under a friend's name.
+    func statusLine(metric: Bool) -> String {
+        if atHome { return "At home" }
+        if let p = placeName { return "At \(p)" }
+        if isDriving { return speedMps.map { "Driving · \(Units.formatSpeed($0, metric: metric))" } ?? "Driving" }
+        return "Parked"
     }
     var point: GeoPoint { GeoPoint(latitude: lat, longitude: lng) }
 }
@@ -80,11 +93,59 @@ struct Drive: Codable, Identifiable, Equatable {
     var durationS: Int
     var avgSpeedMps: Double?
     var maxSpeedMps: Double?
+    var hardBrakes: Int?
+    var rapidAccels: Int?
+    var maxG: Double?
+    var zeroToSixtyS: Double?
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id", vehicleId = "vehicle_id", startedAt = "started_at", endedAt = "ended_at"
         case distanceM = "distance_m", durationS = "duration_s", avgSpeedMps = "avg_speed_mps", maxSpeedMps = "max_speed_mps"
+        case hardBrakes = "hard_brakes", rapidAccels = "rapid_accels", maxG = "max_g", zeroToSixtyS = "zero_to_sixty_s"
     }
+}
+
+struct Place: Codable, Identifiable, Equatable {
+    var id: UUID
+    var userId: UUID
+    var name: String
+    var kind: String
+    var lat: Double
+    var lng: Double
+    var radiusM: Int
+    var shareWith: String
+    var point: GeoPoint { GeoPoint(latitude: lat, longitude: lng) }
+    enum CodingKeys: String, CodingKey { case id, name, kind, lat, lng; case userId = "user_id", radiusM = "radius_m", shareWith = "share_with" }
+}
+
+struct FriendPref: Codable, Identifiable, Equatable {
+    var friendId: UUID
+    var notifyDrives: Bool
+    var notifyPlaces: Bool
+    var id: UUID { friendId }
+    enum CodingKeys: String, CodingKey { case friendId = "friend_id", notifyDrives = "notify_drives", notifyPlaces = "notify_places" }
+}
+
+struct PlanETA: Codable, Identifiable, Equatable {
+    var userId: UUID
+    var displayName: String
+    var status: String
+    var etaAt: Date?
+    var etaUpdatedAt: Date?
+    var isDriving: Bool
+    var id: UUID { userId }
+    enum CodingKeys: String, CodingKey { case status; case userId = "user_id", displayName = "display_name", etaAt = "eta_at", etaUpdatedAt = "eta_updated_at", isDriving = "is_driving" }
+}
+
+struct TimelineItem: Codable, Identifiable, Equatable {
+    var kind: String
+    var at: Date
+    var title: String?
+    var lat: Double?
+    var lng: Double?
+    var refId: UUID?
+    var id: String { "\(kind)-\(at.timeIntervalSince1970)" }
+    enum CodingKeys: String, CodingKey { case kind, at, title, lat, lng; case refId = "ref_id" }
 }
 
 /// A friend's drive that overlapped one of mine — drawn on the playback map.

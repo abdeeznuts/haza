@@ -5,6 +5,9 @@ import HazaCore
 
 struct ProfileScreen: View {
     @Environment(AppState.self) private var state
+    @Environment(Nav.self) private var nav
+    @Environment(\.dismiss) private var dismiss
+    private let discover = DiscoverEngine.shared
     @State private var confirmDelete = false
     @State private var editingName = false
     @State private var newName = ""
@@ -26,11 +29,20 @@ struct ProfileScreen: View {
                     }.padding(.top, 8)
 
                     ReferralCard()
+                    if !discover.remaining.isEmpty {
+                        DiscoverTray { route in
+                            dismiss()
+                            Task { try? await Task.sleep(for: .milliseconds(450)); nav.go(route) }   // let this sheet finish closing first
+                        }
+                    }
                     if !HazaBrand.everythingUnlocked {
                         NavigationLink { PaywallView() } label: { Row(title: state.pro.isPro ? "Manage Pro" : "Get Pro", subtitle: "Unlimited history and playback, unlimited crews, all cars, radar sharing") { Glyph(text: "★") } trailing: { Image(systemName: "chevron.right").foregroundStyle(HazaTheme.muted) } }
                     }
                     NavigationLink { FriendsScreen() } label: { Row(title: "Friends", subtitle: "Requests, add by @handle, your handle") { Glyph(text: "F") } trailing: { Image(systemName: "chevron.right").foregroundStyle(HazaTheme.muted) } }
                     NavigationLink { GarageScreen() } label: { Row(title: "Garage", subtitle: "Your cars") { Glyph(text: "G") } trailing: { Image(systemName: "chevron.right").foregroundStyle(HazaTheme.muted) } }
+                    NavigationLink { PlacesScreen() } label: { Row(title: "Places", subtitle: "Work, school, the gym — “At Work” instead of a dot") { Glyph(text: "◎") } trailing: { Image(systemName: "chevron.right").foregroundStyle(HazaTheme.muted) } }
+                    NavigationLink { DayTimelineView() } label: { Row(title: "Timeline", subtitle: "Where you were, day by day. Only you.") { Glyph(text: "◷") } trailing: { Image(systemName: "chevron.right").foregroundStyle(HazaTheme.muted) } }
+                    NavigationLink { RecapView() } label: { Row(title: "Weekly recap", subtitle: "Miles, best 0–60, peak g, hard brakes") { Glyph(text: "Σ") } trailing: { Image(systemName: "chevron.right").foregroundStyle(HazaTheme.muted) } }
                     NavigationLink { BriefingView(embedded: true) } label: { Row(title: "Briefing", subtitle: "\(state.briefing.count) things you could still set up") { Glyph(text: "\(state.briefing.count)") } trailing: { Image(systemName: "chevron.right").foregroundStyle(HazaTheme.muted) } }
 
                     Eyebrow("Where Haza lives").padding(.top, 10)
@@ -76,6 +88,35 @@ struct ProfileScreen: View {
         case "contacts": return "From your contact card"
         default: return "Set it, or let Haza learn it over a few nights"
         }
+    }
+}
+
+/// Features not yet introduced, one line each. The moment cards show themselves in context;
+/// this is the catalog for the curious — a quiet list, never a tour.
+struct DiscoverTray: View {
+    var onOpen: (DiscoverEngine.Moment.Route) -> Void
+    private let discover = DiscoverEngine.shared
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack { Eyebrow("Discover"); Spacer(); Text("\(discover.remaining.count) left").font(.system(size: 12)).foregroundStyle(HazaTheme.muted) }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(discover.remaining) { m in
+                        Button { discover.markSeen(m.id); onOpen(m.route) } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(m.title).font(HazaTheme.display(17)).foregroundStyle(HazaTheme.ink).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                                Text(m.cta + " →").font(.system(size: 13, weight: .semibold)).foregroundStyle(HazaTheme.muted)
+                            }
+                            .padding(14).frame(width: 190, height: 120, alignment: .topLeading)
+                            .background(HazaTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(HazaTheme.hair, lineWidth: 1))
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.top, 4)
     }
 }
 
